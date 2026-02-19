@@ -72,7 +72,7 @@ Switch between providers anytime in the Settings screen (⚙️ in the header). 
 
 **[Download on Gumroad →](https://gumroad.com/l/bookmarkbrain)**
 
-1. Download and unzip `BookmarkBrain-v1.7.zip`
+1. Download and unzip `BookmarkBrain-v1.8.zip`
 2. Drag `BookmarkBrain.app` to `/Applications`
 3. Right-click → Open on first launch (one-time Gatekeeper bypass)
 4. Enter your API key when prompted (or configure in Settings after launch)
