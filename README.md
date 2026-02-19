@@ -21,7 +21,8 @@
 
 <br/>
 
-![Bookmark Brain UI](screenshot.png)
+<img width="2208" height="955" alt="Bookmark Brain" src="https://github.com/user-attachments/assets/bd996bb3-eb2f-436f-82a5-d5054783c145" />
+
 
 </div>
 
