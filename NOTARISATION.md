@@ -1,6 +1,6 @@
 # Developer ID signing and notarisation
 
-The v1.10.3-beta.1 Notarised ZIP was accepted by Apple on 30 September 2026 (UK time). Submission: 00945904-21a4-47c1-a487-fb01ab8ccf44. Ticket stapling, Gatekeeper assessment and extracted-app smoke checks passed. Earlier non-Notarised assets remain for history.
+The v1.10.3-beta.1 Notarised ZIP was accepted by Apple on 30 September 2026 (UK time). Submission: 00945904-21a4-47c1-a487-fb01ab8ccf44. Ticket stapling, Gatekeeper assessment and extracted-app smoke checks passed. The non-notarised Mac asset was removed from the current release to prevent incorrect downloads.
 
 ## One-time setup on the build Mac
 
