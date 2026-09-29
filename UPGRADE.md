@@ -4,7 +4,7 @@
 
 1. In your current Bookmark Brain window, click **Export**. Keep that JSON file somewhere safe.
 2. Click the **brain in the Mac menu bar** and choose **Quit Bookmark Brain**. Closing its browser tab is not enough. If you still run the old Terminal version, stop that one with **Ctrl+C** too.
-3. Download **Bookmark-Brain-Mac-Apple-Silicon.zip** from [this release](https://github.com/propagatemedia/bookmark-brain/releases/tag/v1.10.3-beta.1).
+3. Download **Bookmark-Brain-Mac-Apple-Silicon-Notarised.zip** from [this release](https://github.com/propagatemedia/bookmark-brain/releases/tag/v1.10.3-beta.1).
 4. Unzip it in **Downloads**, outside Google Drive.
 5. Drag **Bookmark Brain.app** into **Applications**. Choose **Replace** when asked.
 6. Double-click the app in Applications. It opens the correct local address automatically. Check the header says **v1.10.3-beta.1**.
@@ -36,7 +36,7 @@ With AI enabled, new links send their URL and title to your selected provider. D
 
 ## Compatibility
 
-Apple Silicon, macOS 26.4.1 or newer; tested on macOS 26.4.1. Intel and older macOS builds are not included. This beta is ad-hoc signed, not Apple-notarised. macOS may block a downloaded copy. If blocked, use Apple's per-app approval flow only if you trust this GitHub release; never disable Gatekeeper globally. No cloud accounts, billing or automatic app updates are enabled.
+Apple Silicon, macOS 26.4.1 or newer; tested on macOS 26.4.1. Intel and older macOS builds are not included. Choose the Notarised ZIP: it is Developer ID signed and Apple-notarised. A normal first-open confirmation may still appear. Never disable Gatekeeper globally. No cloud accounts, billing or automatic app updates are enabled.
 
 ## Provider rate limits
 

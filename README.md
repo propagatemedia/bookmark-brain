@@ -6,7 +6,7 @@ A local bookmark library with search, categories, favourites, shortcut import an
 
 ## Mac app: no Terminal or Python installation needed
 
-[Download the Apple Silicon Mac app](https://github.com/propagatemedia/bookmark-brain/releases/download/v1.10.3-beta.1/Bookmark-Brain-Mac-Apple-Silicon.zip).
+[Download the Apple Silicon Mac app](https://github.com/propagatemedia/bookmark-brain/releases/download/v1.10.3-beta.1/Bookmark-Brain-Mac-Apple-Silicon-Notarised.zip).
 
 1. Extract the ZIP into Downloads, outside Google Drive.
 2. Drag **Bookmark Brain.app** into Applications and double-click it.
@@ -14,7 +14,7 @@ A local bookmark library with search, categories, favourites, shortcut import an
 
 Python is included, and existing bookmarks stay in the same local data folder. Closing the browser tab does not quit the app. If the old Terminal version is running, the packaged app chooses another available port without stopping other processes.
 
-**Compatibility:** this build targets Apple Silicon and macOS 26.4.1 or newer, and was tested on macOS 26.4.1. Intel Macs and older macOS versions are not supported by this build. It is an ad-hoc signed beta, not Developer ID signed or Apple-notarised; macOS may block downloaded copies. Do not disable Gatekeeper globally. The source version below remains available.
+**Compatibility:** this build targets Apple Silicon and macOS 26.4.1 or newer, and was tested on macOS 26.4.1. Intel Macs and older macOS versions are not supported by this build. The Notarised download is Developer ID signed and Apple-notarised. macOS may still ask you to confirm opening an app downloaded from the internet. Do not disable Gatekeeper globally. The source version below remains available.
 
 [Release notes and checksum](https://github.com/propagatemedia/bookmark-brain/releases/tag/v1.10.3-beta.1) · [Build instructions](MAC-PACKAGING.md)
 

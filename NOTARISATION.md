@@ -1,6 +1,6 @@
 # Developer ID signing and notarisation
 
-The current public download is still ad-hoc signed. This workflow does not change that until a new signed archive has been accepted by Apple, checked and published.
+The v1.10.3-beta.1 Notarised ZIP was accepted by Apple on 30 September 2026 (UK time). Submission: 00945904-21a4-47c1-a487-fb01ab8ccf44. Ticket stapling, Gatekeeper assessment and extracted-app smoke checks passed. Earlier non-Notarised assets remain for history.
 
 ## One-time setup on the build Mac
 
