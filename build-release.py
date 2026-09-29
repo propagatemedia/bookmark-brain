@@ -4,8 +4,8 @@ import hashlib
 import zipfile
 
 root = Path(__file__).resolve().parent
-version = '1.9.0-beta.1'
-files = ['app.py', 'README.md', 'LICENSE', 'CHANGELOG.md', 'Start-Bookmark-Brain.command', 'build-release.py', 'tests/test_app.py']
+version = '1.9.1-beta.1'
+files = ['app.py', 'README.md', 'LICENSE', 'CHANGELOG.md', 'Start-Bookmark-Brain.command', 'build-release.py', 'tests/test_app.py', 'tests/test_launcher.py', 'mac_launcher.py', 'BookmarkBrain.spec', 'MAC-PACKAGING.md', 'requirements-mac-build.txt', 'assets/AppIcon.icns']
 output = root / 'dist'
 output.mkdir(exist_ok=True)
 archive = output / f'BookmarkBrain-v{version}.zip'

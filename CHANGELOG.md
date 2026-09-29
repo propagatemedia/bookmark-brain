@@ -1,3 +1,14 @@
+# v1.9.1-beta.1
+
+- Add a self-contained Apple Silicon Mac app with bundled Python and a native menu-bar launcher.
+- Open the library and data folder, or quit cleanly, from the menu bar. No Terminal window required.
+- Reuse the running packaged instance and select an available loopback port if 5055 is occupied.
+- Preserve existing local data paths and never kill other processes.
+- Remove the duplicate brain emoji from the browser title, keeping the favicon.
+- Add launcher regression tests and packaged-runtime verification.
+
+Tested on macOS 26.4.1, Apple Silicon. Ad-hoc signed only, not notarised. Public-download Gatekeeper approval and other Mac configurations remain unverified.
+
 # v1.9.0-beta.1
 
 - Default No AI mode saves bookmarks without provider credentials or external requests.

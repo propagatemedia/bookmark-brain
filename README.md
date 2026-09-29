@@ -2,7 +2,21 @@
 
 A local bookmark library with search, categories, favourites, shortcut import and JSON export. This is the original desktop product, maintained separately from the [web demo](https://www.bookmarkbrain.co/demo).
 
-## Download and run
+## Mac app: no Terminal or Python installation needed
+
+[Download the Apple Silicon Mac app](https://github.com/propagatemedia/bookmark-brain/releases/download/v1.9.1-beta.1/Bookmark-Brain-Mac-Apple-Silicon.zip).
+
+1. Extract the ZIP into Downloads, outside Google Drive.
+2. Drag **Bookmark Brain.app** into Applications and double-click it.
+3. The browser opens your library. Use the brain icon in the menu bar to reopen it or quit.
+
+Python is included, and existing bookmarks stay in the same local data folder. Closing the browser tab does not quit the app. If the old Terminal version is running, the packaged app chooses another available port without stopping other processes.
+
+**Compatibility:** this build targets Apple Silicon and macOS 26.4.1 or newer, and was tested on macOS 26.4.1. Intel Macs and older macOS versions are not supported by this build. It is an ad-hoc signed beta, not Developer ID signed or Apple-notarised; macOS may block downloaded copies. Do not disable Gatekeeper globally. The source version below remains available.
+
+[Release notes and checksum](https://github.com/propagatemedia/bookmark-brain/releases/tag/v1.9.1-beta.1) · [Build instructions](MAC-PACKAGING.md)
+
+## Download and run the source version
 
 [Download v1.9.0-beta.1](https://github.com/propagatemedia/bookmark-brain/releases/tag/v1.9.0-beta.1).
 
