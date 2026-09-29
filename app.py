@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Bookmark Brain v1.10.2-beta.1 — Multi-provider AI support
+Bookmark Brain v1.10.3-beta.1 — Multi-provider AI support
 Providers: Anthropic, OpenAI, Google Gemini, Groq, Ollama
 Zero external dependencies — Python stdlib only.
 """
@@ -137,6 +137,10 @@ def get_db():
         conn.commit()
     except sqlite3.OperationalError:
         pass
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(bookmarks)")}
+    if "ai_enriched" not in columns:
+        conn.execute("ALTER TABLE bookmarks ADD COLUMN ai_enriched INTEGER")
+        conn.commit()
     return conn
 
 # ── Domain → forced category ─────────────────────────────
@@ -289,7 +293,9 @@ def analyze_bookmark(url, title=""):
             return data
     if fcat:
         data["category"] = fcat
-    return metadata(data, url, title)
+    result = metadata(data, url, title)
+    result["ai_enriched"] = True
+    return result
 
 # ── Multipart parser ──────────────────────────────────────
 def parse_multipart(rfile, content_type, content_length):
@@ -439,7 +445,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 18p
 <div class="prog" id="prog"></div>
 
 <header>
-  <div class="logo">🧠 Bookmark Brain <span class="ver">v1.10.2-beta.1</span></div>
+  <div class="logo">🧠 Bookmark Brain <span class="ver">v1.10.3-beta.1</span></div>
   <div class="header-mid">
     <div class="provider-pill" onclick="openSettings()">
       <span class="provider-dot" id="provider-dot"></span>
@@ -473,7 +479,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 18p
     <div class="sidebar-label" style="margin-top:3px">Categories</div>
     <div id="cats"></div>
   </aside>
-  <main class="content"><div class="cards" id="cards"></div></main>
+  <main class="content"><div style="display:flex;gap:8px;margin-bottom:12px"><button class="card-btn" onclick="setAllCards(true)">Expand all</button><button class="card-btn" onclick="setAllCards(false)">Collapse all</button></div><div class="cards" id="cards"></div></main>
 </div>
 
 <!-- Settings Modal -->
@@ -582,6 +588,7 @@ async function loadBM(){
         <div style="min-width:0"><div class="card-title" title="${esc(b.title||b.url)}">${esc(b.title||b.url)}</div><div class="card-domain">${esc(b.domain||'')}</div></div>
       </div>
       <div class="card-footer">
+        ${b.ai_enriched!==1?`<button class="card-btn" aria-label="Enrich bookmark with AI" title="${b.ai_enriched===null?'AI status unknown for this older bookmark':'Enrich with AI'}" onclick="enrichBookmark(${b.id},this)">🧠</button>`:''}
         <span class="badge" style="background:${col}22;color:${col}">${esc(b.category||'Other')}</span>
       </div>
       <details class="card-details" ${expandedBookmarks.has(b.id)?'open':''} ontoggle="this.open?expandedBookmarks.add(${b.id}):expandedBookmarks.delete(${b.id})">
@@ -593,6 +600,19 @@ async function loadBM(){
   }).join('');
 }
 
+function setAllCards(open){
+ document.querySelectorAll('.card-details').forEach(el=>{el.open=open});
+ bookmarkRows.forEach(b=>open?expandedBookmarks.add(b.id):expandedBookmarks.delete(b.id));
+}
+async function enrichBookmark(id,button){
+ if(settings.provider==='none'){toast('Choose an AI provider and model in Settings first.');openSettings();return;}
+ if(!confirm('Send this link and title to your selected AI provider? Provider charges may apply. Successful enrichment replaces its title, notes, category and tags.'))return;
+ button.disabled=true;toast('Enriching…');
+ try{const response=await apiFetch('/api/bookmarks/'+id+'/enrich',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm_cost:true})});
+ const result=await response.json();if(!response.ok)throw new Error(result.error);
+ toast(result.notice||'AI enrichment saved');await loadBM();loadCats();
+ }catch(e){toast(e.message)}finally{button.disabled=false}
+}
 async function loadCats(){
   const cats=await apiFetch('/api/categories').then(r=>r.json());
   $('n-cats').textContent=cats.length;
@@ -931,7 +951,7 @@ class Handler(BaseHTTPRequestHandler):
         data = analyze_bookmark(url, title)
         with _db_lock, contextlib.closing(get_db()) as db:
             try:
-                db.execute("INSERT INTO bookmarks (url,title,summary,category,tags,domain) VALUES (?,?,?,?,?,?)", (url, data["title"], data["summary"], data["category"], json.dumps(data["tags"]), urlparse(url).hostname))
+                db.execute("INSERT INTO bookmarks (url,title,summary,category,tags,domain,ai_enriched) VALUES (?,?,?,?,?,?,?)", (url, data["title"], data["summary"], data["category"], json.dumps(data["tags"]), urlparse(url).hostname, int(bool(data.get("ai_enriched")))))
                 db.commit()
             except sqlite3.IntegrityError:
                 db.execute("UPDATE bookmarks SET save_count=save_count+1, favourite=CASE WHEN save_count+1>=3 THEN 1 ELSE favourite END WHERE url=?", (url,))
@@ -1024,6 +1044,35 @@ class Handler(BaseHTTPRequestHandler):
                             settings["providers"][provider]["api_key"] = ""
                     save_settings(settings)
                 self.send_json({"success": True, "settings": public_settings(settings)})
+            elif self.command == "POST" and re.fullmatch(r"/api/bookmarks/\d+/enrich", self.path):
+                body = self.read_json(length)
+                if body.get("confirm_cost") is not True:
+                    raise ValueError("Confirm the provider request first")
+                if load_settings()["provider"] == "none":
+                    raise ValueError("Choose an AI provider and model in Settings first")
+                bid = int(self.path.split("/")[3])
+                with _db_lock, contextlib.closing(get_db()) as db:
+                    row = db.execute("SELECT * FROM bookmarks WHERE id=?", (bid,)).fetchone()
+                    if row is None:
+                        self.send_json({"error": "Bookmark not found"}, 404)
+                        return
+                    original = dict(row)
+                if original["ai_enriched"] == 1:
+                    self.send_json({"success": True, "notice": "Already enriched"})
+                    return
+                data = analyze_bookmark(original["url"], original["title"])
+                if not data.get("ai_enriched"):
+                    self.send_json({"success": False, "notice": "AI is unavailable or rate-limited. Your bookmark is unchanged; try the brain button later."})
+                    return
+                with _db_lock, contextlib.closing(get_db()) as db:
+                    current = db.execute("SELECT * FROM bookmarks WHERE id=?", (bid,)).fetchone()
+                    if current is None or any(current[k] != original[k] for k in ("title", "summary", "category", "tags", "ai_enriched")):
+                        self.send_json({"error": "Bookmark changed while AI was working. Your edits were kept."}, 409)
+                        return
+                    features.snapshot(db, SUPPORT_DIR, "before-import")
+                    db.execute("UPDATE bookmarks SET title=?,summary=?,category=?,tags=?,ai_enriched=1 WHERE id=?", (data["title"], data["summary"], data["category"], json.dumps(data["tags"]), bid))
+                    db.commit()
+                self.send_json({"success": True})
             elif self.command == "POST" and self.path == "/api/add_url":
                 body = self.read_json(length)
                 self.send_json(self.add_bookmark(body.get("url"), str(body.get("title") or "")[:300]))
@@ -1095,7 +1144,7 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     os.makedirs(SUPPORT_DIR, mode=0o700, exist_ok=True)
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    print(f"Bookmark Brain v1.10.2-beta.1: http://127.0.0.1:{PORT}", flush=True)
+    print(f"Bookmark Brain v1.10.3-beta.1: http://127.0.0.1:{PORT}", flush=True)
     print(f"Database: {DB_PATH}. Press Ctrl+C to stop.", flush=True)
     try:
         server.serve_forever()

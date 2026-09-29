@@ -10,6 +10,27 @@ class FeatureTests(unittest.TestCase):
     setUp = test_app.DesktopTests.setUp
     tearDown = test_app.DesktopTests.tearDown
     request = test_app.DesktopTests.request
+    def test_enrichment_status_failure_and_success(self):
+        self.request('POST','/api/add_url',{'url':'https://example.com/enrich'})
+        row=self.request('GET','/api/bookmarks')[1][0]
+        self.assertEqual(row['ai_enriched'],0)
+        route='/api/bookmarks/'+str(row['id'])+'/enrich'
+        self.assertEqual(self.request('POST',route,{'confirm_cost':True})[0],400)
+        settings=app.load_settings();settings['provider']='openrouter';settings['providers']['openrouter']['model']='fixture';app.save_settings(settings)
+        self.assertEqual(self.request('POST',route,{})[0],400)
+        with patch.object(app,'analyze_bookmark',return_value={'notice':'Limited'}):
+            self.assertFalse(self.request('POST',route,{'confirm_cost':True})[1]['success'])
+        self.assertEqual(self.request('GET','/api/bookmarks')[1][0],row)
+        enriched={'title':'Enriched','summary':'AI notes','category':'Tools','tags':['ai'],'ai_enriched':True}
+        with patch.object(app,'analyze_bookmark',return_value=enriched) as call:
+            self.assertTrue(self.request('POST',route,{'confirm_cost':True})[1]['success'])
+            self.request('POST',route,{'confirm_cost':True})
+            self.assertEqual(call.call_count,1)
+        result=self.request('GET','/api/bookmarks')[1][0]
+        self.assertEqual((result['ai_enriched'],result['summary']),(1,'AI notes'))
+        rows,_=features.parse_import('backup.json',json.dumps([result]).encode(),app.valid_url)
+        self.assertEqual(rows[0]['ai_enriched'],1)
+
     def test_rate_limit_saves_links_and_backs_off(self):
         settings=app.load_settings(); settings['provider']='openrouter'
         settings['providers']['openrouter']['model']='fixture'; app.save_settings(settings)

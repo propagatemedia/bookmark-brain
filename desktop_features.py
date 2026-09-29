@@ -61,6 +61,7 @@ def parse_import(filename, content, valid_url, local_backup=False):
             'category': str(value.get('category') or 'Other')[:60],
             'tags': [t[:40] for t in tags if isinstance(t, str)][:20] if isinstance(tags, list) else [],
             'favourite': int(value.get('favourite') is True or value.get('favourite') == 1),
+            'ai_enriched': value.get('ai_enriched') if type(value.get('ai_enriched')) in (int, bool) and value.get('ai_enriched') in (0, 1) else None,
             'save_count': min(1000000, max(1, value.get('save_count', 1))) if type(value.get('save_count', 1)) is int else 1,
             'added_at': str(value.get('added_at') or value.get('created_at') or datetime.now(timezone.utc).isoformat())[:40],
         })
@@ -92,8 +93,8 @@ def snapshot(db, support, reason='manual'):
 def merge_rows(db, rows):
     added = 0
     for row in rows:
-        result = db.execute('INSERT OR IGNORE INTO bookmarks (url,title,summary,category,tags,domain,favourite,added_at,save_count) VALUES (?,?,?,?,?,?,?,?,?)',
-            (row['url'],row['title'],row['summary'],row['category'],json.dumps(row['tags']),urlparse(row['url']).hostname,row['favourite'],row['added_at'],row['save_count']))
+        result = db.execute('INSERT OR IGNORE INTO bookmarks (url,title,summary,category,tags,domain,favourite,added_at,save_count,ai_enriched) VALUES (?,?,?,?,?,?,?,?,?,?)',
+            (row['url'],row['title'],row['summary'],row['category'],json.dumps(row['tags']),urlparse(row['url']).hostname,row['favourite'],row['added_at'],row['save_count'],row['ai_enriched']))
         added += result.rowcount
     db.commit()
     return added

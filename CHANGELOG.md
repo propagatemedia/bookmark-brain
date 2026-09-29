@@ -1,3 +1,9 @@
+# v1.10.3-beta.1
+
+- Expand all and Collapse all for the visible cards.
+- Brain button enriches locally saved bookmarks on demand. Requests require confirmation; failures preserve existing content.
+- Enrichment status survives backup and import. Older bookmarks have unknown status and offer enrichment without claiming they were never processed.
+
 # v1.10.2-beta.1
 
 - Bookmark notes and tags start collapsed. Expand or collapse each card; its state is retained during library updates in the current page.

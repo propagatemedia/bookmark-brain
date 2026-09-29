@@ -35,4 +35,4 @@ jobs:
       - name: Publish beside Mac download
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload v1.10.2-beta.1 Bookmark-Brain-Windows-x64.zip WINDOWS-SHA256SUMS.txt WINDOWS.md --repo propagatemedia/bookmark-brain
+        run: gh release upload v1.10.3-beta.1 Bookmark-Brain-Windows-x64.zip WINDOWS-SHA256SUMS.txt WINDOWS.md --repo propagatemedia/bookmark-brain
