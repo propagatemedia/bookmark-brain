@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Bookmark Brain v1.10.1-beta.1 — Multi-provider AI support
+Bookmark Brain v1.10.2-beta.1 — Multi-provider AI support
 Providers: Anthropic, OpenAI, Google Gemini, Groq, Ollama
 Zero external dependencies — Python stdlib only.
 """
@@ -361,7 +361,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 18p
 .fav-btn.active{background:rgba(251,191,36,.08)!important;color:var(--gold)!important;border-right-color:var(--gold)!important}
 .cat-count{font-family:'DM Mono',monospace;font-size:10px;flex-shrink:0;margin-left:3px}
 .content{flex:1;overflow-y:auto;padding:13px 16px}
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:9px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:9px;align-items:start}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:13px;transition:all .2s;position:relative}
 .card:hover{border-color:rgba(139,92,246,.3);background:var(--surface2)}
 .card.fav{border-color:rgba(251,191,36,.22)}
@@ -377,6 +377,11 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 18p
 .favicon img{width:100%;height:100%;object-fit:cover}
 .card-title{font-size:13px;font-weight:600;color:var(--text);line-height:1.3;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card-domain{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)}
+.card-details summary{cursor:pointer;color:var(--purple2);font-size:12px;margin-top:9px}
+.card-details .collapse-label{display:none}
+.card-details[open] .expand-label{display:none}
+.card-details[open] .collapse-label{display:inline}
+.card-details .card-summary{margin-top:9px;overflow-wrap:anywhere}
 .card-summary{font-size:12px;color:var(--muted);line-height:1.55;margin-bottom:9px}
 .card-footer{display:flex;gap:4px;flex-wrap:wrap}
 .badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;background:rgba(139,92,246,.15);color:var(--purple2)}
@@ -434,7 +439,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 18p
 <div class="prog" id="prog"></div>
 
 <header>
-  <div class="logo">🧠 Bookmark Brain <span class="ver">v1.10.1-beta.1</span></div>
+  <div class="logo">🧠 Bookmark Brain <span class="ver">v1.10.2-beta.1</span></div>
   <div class="header-mid">
     <div class="provider-pill" onclick="openSettings()">
       <span class="provider-dot" id="provider-dot"></span>
@@ -535,6 +540,7 @@ const PROVIDER_SUBS = {
 let settings = """ + script_json(settings) + r""";
 let activeCat='', favOnly=false, searchTimer;
 let bookmarkRows=[], editingBookmarkId=null;
+const expandedBookmarks=new Set();
 
 // ── Toast / Progress ──
 function toast(msg){const t=$('toast');t.textContent=msg;t.className='toast show';clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3200)}
@@ -575,11 +581,14 @@ async function loadBM(){
         <div class="favicon">${fi}</div>
         <div style="min-width:0"><div class="card-title" title="${esc(b.title||b.url)}">${esc(b.title||b.url)}</div><div class="card-domain">${esc(b.domain||'')}</div></div>
       </div>
-      <div class="card-summary">${esc(b.summary||'')}</div>
       <div class="card-footer">
         <span class="badge" style="background:${col}22;color:${col}">${esc(b.category||'Other')}</span>
-        ${tags.slice(0,4).map(t=>`<span class="tag">${esc(t)}</span>`).join('')}
       </div>
+      <details class="card-details" ${expandedBookmarks.has(b.id)?'open':''} ontoggle="this.open?expandedBookmarks.add(${b.id}):expandedBookmarks.delete(${b.id})">
+        <summary><span class="expand-label">Expand</span><span class="collapse-label">Collapse</span></summary>
+        <div class="card-summary">${esc(b.summary||'No notes yet.')}</div>
+        <div class="card-footer">${tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}</div>
+      </details>
     </div>`;
   }).join('');
 }
@@ -1086,7 +1095,7 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     os.makedirs(SUPPORT_DIR, mode=0o700, exist_ok=True)
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    print(f"Bookmark Brain v1.10.1-beta.1: http://127.0.0.1:{PORT}", flush=True)
+    print(f"Bookmark Brain v1.10.2-beta.1: http://127.0.0.1:{PORT}", flush=True)
     print(f"Database: {DB_PATH}. Press Ctrl+C to stop.", flush=True)
     try:
         server.serve_forever()

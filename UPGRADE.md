@@ -1,13 +1,13 @@
-# Upgrade to Bookmark Brain 1.10.1 beta
+# Upgrade to Bookmark Brain 1.10.2 beta
 
 ## The simple version
 
 1. In your current Bookmark Brain window, click **Export**. Keep that JSON file somewhere safe.
 2. Click the **brain in the Mac menu bar** and choose **Quit Bookmark Brain**. Closing its browser tab is not enough. If you still run the old Terminal version, stop that one with **Ctrl+C** too.
-3. Download **Bookmark-Brain-Mac-Apple-Silicon.zip** from [this release](https://github.com/propagatemedia/bookmark-brain/releases/tag/v1.10.1-beta.1).
+3. Download **Bookmark-Brain-Mac-Apple-Silicon.zip** from [this release](https://github.com/propagatemedia/bookmark-brain/releases/tag/v1.10.2-beta.1).
 4. Unzip it in **Downloads**, outside Google Drive.
 5. Drag **Bookmark Brain.app** into **Applications**. Choose **Replace** when asked.
-6. Double-click the app in Applications. It opens the correct local address automatically. Check the header says **v1.10.1-beta.1**.
+6. Double-click the app in Applications. It opens the correct local address automatically. Check the header says **v1.10.2-beta.1**.
 
 Your bookmarks and settings live separately in `~/Library/Application Support/BookmarkBrain`. Replacing the app keeps them. Do not delete that data folder. If you use a custom BOOKMARK_DB or BOOKMARK_SUPPORT path, continue using that same configuration; the normal app uses the default path above.
 

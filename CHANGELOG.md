@@ -1,3 +1,8 @@
+# v1.10.2-beta.1
+
+- Bookmark notes and tags start collapsed. Expand or collapse each card; its state is retained during library updates in the current page.
+- Includes the v1.10.1 provider rate-limit fix.
+
 # v1.10.1-beta.1
 
 - Rate-limited AI saves now keep the bookmark locally and show a notice.
