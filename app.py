@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Bookmark Brain v1.10.0-beta.1 — Multi-provider AI support
+Bookmark Brain v1.10.1-beta.1 — Multi-provider AI support
 Providers: Anthropic, OpenAI, Google Gemini, Groq, Ollama
 Zero external dependencies — Python stdlib only.
 """
 
+import time
 import os, json, sqlite3, plistlib, re, urllib.request, urllib.error, threading, secrets, tempfile, contextlib
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, unquote, parse_qs
@@ -21,6 +22,8 @@ SUPPORT_DIR = os.environ.get("BOOKMARK_SUPPORT",
 DB_PATH = os.environ.get("BOOKMARK_DB", str(Path(SUPPORT_DIR) / "bookmarks.db"))
 SETTINGS_PATH = str(Path(SUPPORT_DIR) / "settings.json")
 _db_lock = threading.Lock()
+_ai_lock = threading.Lock()
+_ai_cooldowns = {}
 
 # ── Default settings ─────────────────────────────────────
 DEFAULT_SETTINGS = {
@@ -265,7 +268,25 @@ def analyze_bookmark(url, title=""):
         raise ValueError(f"Unknown provider: {provider}")
     if not cfg.get("model"):
         raise ValueError("Choose a model in Settings, or select No AI.")
-    data = caller(prompt, cfg)
+    # Serialise enrichment and respect provider backoff without losing saves.
+    with _ai_lock:
+        if time.monotonic() < _ai_cooldowns.get(provider, 0):
+            data = metadata({}, url, title)
+            data["notice"] = "Saved locally without AI while the provider rate limit cools down."
+            return data
+        try:
+            data = caller(prompt, cfg)
+        except urllib.error.HTTPError as exc:
+            if exc.code != 429:
+                raise
+            try:
+                delay = max(60, min(3600, float(exc.headers.get("Retry-After", "60"))))
+            except (ValueError, TypeError, AttributeError):
+                delay = 60
+            _ai_cooldowns[provider] = time.monotonic() + delay
+            data = metadata({}, url, title)
+            data["notice"] = "Saved locally without AI. Provider rate limit or quota reached; check your provider balance if it continues."
+            return data
     if fcat:
         data["category"] = fcat
     return metadata(data, url, title)
@@ -413,7 +434,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 18p
 <div class="prog" id="prog"></div>
 
 <header>
-  <div class="logo">🧠 Bookmark Brain <span class="ver">v1.10.0-beta.1</span></div>
+  <div class="logo">🧠 Bookmark Brain <span class="ver">v1.10.1-beta.1</span></div>
   <div class="header-mid">
     <div class="provider-pill" onclick="openSettings()">
       <span class="provider-dot" id="provider-dot"></span>
@@ -595,7 +616,8 @@ async function upload(files){
   prog(100);
   const added=res.filter(r=>r.success).length,skip=res.filter(r=>r.skipped).length;
   const favourites=res.filter(r=>r.favourite).length;
-  toast(favourites?`${favourites} repeated link(s) are now favourites`:added?`✓ Added ${added}${skip?' · '+skip+' skipped':''}`:skip?`${skip} repeated or unsupported link(s)`:'Nothing added');
+  const localOnly=res.filter(r=>r.notice).length;
+  toast(localOnly?`✓ Added ${added} · ${localOnly} saved without AI due to provider limits`:favourites?`${favourites} repeated link(s) are now favourites`:added?`✓ Added ${added}${skip?' · '+skip+' skipped':''}`:skip?`${skip} repeated or unsupported link(s)`:'Nothing added');
   loadBM();loadCats();updateFavCount();
 }
 
@@ -604,7 +626,7 @@ async function addUrl(url){
   try{
     const r=await apiFetch('/api/add_url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
     const d=await r.json();prog(100);
-    if(d.success)toast('✓ Added: '+d.title);
+    if(d.success)toast(d.notice||('✓ Added: '+d.title));
     else if(d.skipped)toast(d.favourite?'Already saved · marked as a favourite':`Already saved · saved ${d.save_count||2} times (3 makes it a favourite)`);
     else toast('Error: '+(d.error||'unknown'));
     loadBM();loadCats();updateFavCount();
@@ -906,7 +928,7 @@ class Handler(BaseHTTPRequestHandler):
                 db.execute("UPDATE bookmarks SET save_count=save_count+1, favourite=CASE WHEN save_count+1>=3 THEN 1 ELSE favourite END WHERE url=?", (url,))
                 db.commit()
                 return {"skipped": True, "error": "Already saved"}
-        return {"success": True, "title": data["title"], "category": data["category"]}
+        return {"success": True, "title": data["title"], "category": data["category"], "notice": data.get("notice", "")}
 
     def mutate(self):
         if not self.guard():
@@ -1064,7 +1086,7 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     os.makedirs(SUPPORT_DIR, mode=0o700, exist_ok=True)
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    print(f"Bookmark Brain v1.10.0-beta.1: http://127.0.0.1:{PORT}", flush=True)
+    print(f"Bookmark Brain v1.10.1-beta.1: http://127.0.0.1:{PORT}", flush=True)
     print(f"Database: {DB_PATH}. Press Ctrl+C to stop.", flush=True)
     try:
         server.serve_forever()

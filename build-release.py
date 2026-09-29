@@ -4,7 +4,7 @@ import hashlib
 import zipfile
 
 root = Path(__file__).resolve().parent
-version = '1.10.0-beta.1'
+version = '1.10.1-beta.1'
 files = ['app.py', 'README.md', 'LICENSE', 'CHANGELOG.md', 'Start-Bookmark-Brain.command', 'build-release.py', 'tests/test_app.py', 'tests/test_launcher.py', 'mac_launcher.py', 'BookmarkBrain.spec', 'MAC-PACKAGING.md', 'requirements-mac-build.txt', 'assets/AppIcon.icns', 'desktop_features.py', 'tests/test_features.py', 'UPGRADE.md']
 output = root / 'dist'
 output.mkdir(exist_ok=True)

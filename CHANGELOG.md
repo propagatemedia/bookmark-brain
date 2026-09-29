@@ -1,3 +1,9 @@
+# v1.10.1-beta.1
+
+- Rate-limited AI saves now keep the bookmark locally and show a notice.
+- Serialise AI enrichment and pause requests for at least 60 seconds after HTTP 429, respecting numeric Retry-After up to one hour.
+- Local-only fallback is not automatically enriched later.
+
 # v1.10.0-beta.1
 
 - Edit bookmark titles, notes, categories and tags locally.

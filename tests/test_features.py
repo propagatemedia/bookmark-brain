@@ -10,6 +10,24 @@ class FeatureTests(unittest.TestCase):
     setUp = test_app.DesktopTests.setUp
     tearDown = test_app.DesktopTests.tearDown
     request = test_app.DesktopTests.request
+    def test_rate_limit_saves_links_and_backs_off(self):
+        settings=app.load_settings(); settings['provider']='openrouter'
+        settings['providers']['openrouter']['model']='fixture'; app.save_settings(settings)
+        error=app.urllib.error.HTTPError('https://provider.example',429,'secret',{'Retry-After':'120'},None)
+        with patch.dict(app._ai_cooldowns,{},clear=True), patch.dict(app.CALLERS,{'openrouter':unittest.mock.Mock(side_effect=error)}), patch.object(app.time,'monotonic',return_value=100):
+            for suffix in ('one','two','three'):
+                status,result=self.request('POST','/api/add_url',{'url':'https://example.com/'+suffix})
+                self.assertEqual(status,200)
+                self.assertTrue(result['success'])
+                self.assertIn('without AI',result['notice'])
+                self.assertNotIn('secret',json.dumps(result))
+            self.assertEqual(app.CALLERS['openrouter'].call_count,1)
+            self.assertEqual(len(self.request('GET','/api/bookmarks')[1]),3)
+            self.assertEqual(app._ai_cooldowns['openrouter'],220)
+            with patch.object(app.time,'monotonic',return_value=221):
+                self.request('POST','/api/add_url',{'url':'https://example.com/four'})
+            self.assertEqual(app.CALLERS['openrouter'].call_count,2)
+
     def test_edit_persists_and_invalid_edit_is_atomic(self):
         self.request('POST','/api/add_url',{'url':'https://example.com'})
         bid=self.request('GET','/api/bookmarks')[1][0]['id']
