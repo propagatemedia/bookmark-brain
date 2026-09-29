@@ -111,7 +111,7 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(len(self.request('GET','/api/bookmarks')[1]),1)
 
     def test_ai_failure_does_not_disclose_secrets_or_modify_library(self):
-        settings=app.load_settings();settings['provider']='anthropic';app.save_settings(settings)
+        settings=app.load_settings();settings['provider']='anthropic';settings['providers']['anthropic']['model']='fixture';app.save_settings(settings)
         with patch.dict(app.CALLERS,{'anthropic':lambda *_: (_ for _ in ()).throw(RuntimeError('secret-test-key'))}):
             status,body=self.request('POST','/api/add_url',{'url':'https://example.com'})
         self.assertEqual(status,502)

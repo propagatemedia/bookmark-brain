@@ -16,7 +16,7 @@ Google Drive can add FinderInfo attributes to bundle directories and interfere w
 
 ## Verify
 
-- `python3 -m unittest discover -s tests -v`: ten tests, including launcher exclusivity and port fallback.
+- `python3 -m unittest discover -s tests -v`: 22 tests, including launcher exclusivity and port fallback.
 - Run the bundled `Contents/MacOS/Bookmark Brain --smoke-test`: uses a temporary database to verify bundled SQLite, HTTP saving and title rendering.
 - Launch through macOS `open` with `BOOKMARK_SUPPORT` pointing at a dedicated `/tmp/` path, `BOOKMARK_NO_BROWSER=1` and `BOOKMARK_TEST_EXIT_SECONDS=8` for a timed menu-app lifecycle check. Confirm that the local HTTP endpoint starts and stops and the lock is released.
 

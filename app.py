@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Bookmark Brain v1.9.0-beta.1 — Multi-provider AI support
+Bookmark Brain v1.10.0-beta.1 — Multi-provider AI support
 Providers: Anthropic, OpenAI, Google Gemini, Groq, Ollama
 Zero external dependencies — Python stdlib only.
 """
@@ -9,6 +9,8 @@ import os, json, sqlite3, plistlib, re, urllib.request, urllib.error, threading,
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, unquote, parse_qs
 from pathlib import Path
+from urllib.parse import quote
+import desktop_features as features
 
 PORT = int(os.environ.get("BOOKMARK_PORT", "5055"))
 SESSION_TOKEN = secrets.token_urlsafe(32)
@@ -25,25 +27,20 @@ DEFAULT_SETTINGS = {
     "provider": "none",
     "providers": {
         "none": {"api_key": "", "model": ""},
-        "anthropic": {"api_key": os.environ.get("ANTHROPIC_API_KEY",""), "model": "claude-haiku-4-5-20251001"},
-        "openai":    {"api_key": "", "model": "gpt-4o-mini"},
-        "gemini":    {"api_key": "", "model": "gemini-2.0-flash"},
-        "groq":      {"api_key": "", "model": "llama-3.1-8b-instant"},
-        "ollama":    {"api_key": "", "model": "llama3.2", "base_url": "http://localhost:11434"},
+        "openrouter": {"api_key": "", "model": ""},
+        "anthropic": {"api_key": os.environ.get("ANTHROPIC_API_KEY",""), "model": ""},
+        "openai":    {"api_key": "", "model": ""},
+        "gemini":    {"api_key": "", "model": ""},
+        "groq":      {"api_key": "", "model": ""},
+        "ollama":    {"api_key": "", "model": "", "base_url": "http://localhost:11434"},
     }
 }
 
-PROVIDER_MODELS = {
-    "none": [],
-    "anthropic": ["claude-haiku-4-5-20251001", "claude-sonnet-4-5-20251001", "claude-opus-4-5-20251001"],
-    "openai":    ["gpt-4o-mini", "gpt-4o", "gpt-4-turbo"],
-    "gemini":    ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"],
-    "groq":      ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "mixtral-8x7b-32768", "gemma2-9b-it"],
-    "ollama":    ["llama3.2", "llama3.1", "mistral", "phi3", "gemma2"],
-}
+PROVIDER_MODELS = {provider: [] for provider in DEFAULT_SETTINGS["providers"]}
 
 PROVIDER_LABELS = {
     "none": "No AI (save locally)",
+    "openrouter": "OpenRouter",
     "anthropic": "Anthropic (Claude)",
     "openai":    "OpenAI (GPT)",
     "gemini":    "Google Gemini",
@@ -132,6 +129,11 @@ def get_db():
         conn.commit()
     except Exception:
         pass
+    try:
+        conn.execute("ALTER TABLE bookmarks ADD COLUMN save_count INTEGER NOT NULL DEFAULT 1")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
     return conn
 
 # ── Domain → forced category ─────────────────────────────
@@ -188,7 +190,7 @@ Return exactly:
 def http_post(url, headers, payload):
     req = urllib.request.Request(url, data=json.dumps(payload).encode(),
         headers={**headers, "content-type":"application/json"}, method="POST")
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with urllib.request.build_opener(features.NoRedirect()).open(req, timeout=30) as resp:
         return json.loads(resp.read().decode())
 
 def parse_ai_json(text):
@@ -198,42 +200,50 @@ def parse_ai_json(text):
 def call_anthropic(prompt, cfg):
     result = http_post("https://api.anthropic.com/v1/messages",
         {"x-api-key": cfg["api_key"], "anthropic-version": "2023-06-01"},
-        {"model": cfg["model"], "max_tokens": 400,
+        {"model": cfg["model"], "max_tokens": 1600,
          "messages": [{"role":"user","content":prompt}]})
-    return parse_ai_json(result["content"][0]["text"])
+    return parse_ai_json("".join(p.get("text", "") for p in result["content"] if p.get("type") == "text"))
 
 def call_openai(prompt, cfg):
-    result = http_post("https://api.openai.com/v1/chat/completions",
+    result = http_post("https://api.openai.com/v1/responses",
         {"Authorization": f"Bearer {cfg['api_key']}"},
-        {"model": cfg["model"], "max_tokens": 400, "temperature": 0.3,
-         "messages": [{"role":"user","content":prompt}]})
+        {"model": cfg["model"], "max_output_tokens": 1600, "store": False, "input": prompt})
+    text = "".join(part.get("text", "") for item in result.get("output", [])
+                   if item.get("type") == "message" for part in item.get("content", [])
+                   if part.get("type") == "output_text")
+    return parse_ai_json(text)
+
+
+def call_openrouter(prompt, cfg):
+    result = http_post("https://openrouter.ai/api/v1/chat/completions",
+        {"Authorization": f"Bearer {cfg['api_key']}", "X-Title": "Bookmark Brain"},
+        {"model": cfg["model"], "max_tokens": 1600,
+         "messages": [{"role": "user", "content": prompt}]})
     return parse_ai_json(result["choices"][0]["message"]["content"])
 
 def call_gemini(prompt, cfg):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{cfg['model']}:generateContent?key={cfg['api_key']}"
-    req = urllib.request.Request(url,
-        data=json.dumps({"contents":[{"parts":[{"text":prompt}]}],
-                         "generationConfig":{"maxOutputTokens":400,"temperature":0.3}}).encode(),
-        headers={"content-type":"application/json"}, method="POST")
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        result = json.loads(resp.read().decode())
-    return parse_ai_json(result["candidates"][0]["content"]["parts"][0]["text"])
+    model = quote(cfg["model"].removeprefix("models/"), safe="")
+    result = http_post(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+        {"x-goog-api-key": cfg["api_key"]},
+        {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"maxOutputTokens": 1600}})
+    return parse_ai_json("".join(p.get("text", "") for p in result["candidates"][0]["content"]["parts"] if not p.get("thought")))
 
 def call_groq(prompt, cfg):
     result = http_post("https://api.groq.com/openai/v1/chat/completions",
         {"Authorization": f"Bearer {cfg['api_key']}"},
-        {"model": cfg["model"], "max_tokens": 400, "temperature": 0.3,
+        {"model": cfg["model"], "max_completion_tokens": 1600,
          "messages": [{"role":"user","content":prompt}]})
     return parse_ai_json(result["choices"][0]["message"]["content"])
 
 def call_ollama(prompt, cfg):
     base = cfg.get("base_url","http://localhost:11434").rstrip("/")
     result = http_post(f"{base}/api/chat", {},
-        {"model": cfg["model"], "stream": False,
+        {"model": cfg["model"], "stream": False, "format": "json", "options": {"num_predict": 1600},
          "messages": [{"role":"user","content":prompt}]})
     return parse_ai_json(result["message"]["content"])
 
 CALLERS = {
+    "openrouter": call_openrouter,
     "anthropic": call_anthropic,
     "openai":    call_openai,
     "gemini":    call_gemini,
@@ -253,6 +263,8 @@ def analyze_bookmark(url, title=""):
         return metadata({}, url, title)
     if not caller:
         raise ValueError(f"Unknown provider: {provider}")
+    if not cfg.get("model"):
+        raise ValueError("Choose a model in Settings, or select No AI.")
     data = caller(prompt, cfg)
     if fcat:
         data["category"] = fcat
@@ -389,13 +401,19 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 18p
 .empty p{font-size:12px;line-height:1.6}
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+.provider-card{color:var(--text);font:inherit;text-align:left}
+.modal-body p{font-size:12px;line-height:1.5;margin:10px 0;color:var(--muted)}
+.modal-body label{display:block;margin:12px 0;font-size:12px;color:var(--text)}
+.modal-body textarea{resize:vertical}
+#provider-status,#tools-status{color:var(--purple2)}
 </style>
 </head>
 <body>
 <div class="prog" id="prog"></div>
 
 <header>
-  <div class="logo">🧠 Bookmark Brain <span class="ver">v1.9.0-beta.1</span></div>
+  <div class="logo">🧠 Bookmark Brain <span class="ver">v1.10.0-beta.1</span></div>
   <div class="header-mid">
     <div class="provider-pill" onclick="openSettings()">
       <span class="provider-dot" id="provider-dot"></span>
@@ -407,6 +425,7 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 18p
       <span class="stat"><b id="n-total">0</b> bookmarks</span>
       <span class="stat"><b id="n-cats">0</b> categories</span>
     </div>
+    <button class="settings-btn" onclick="openLibraryTools()" title="Import and backups">Import / backups</button>
     <button class="settings-btn" onclick="exportBookmarks()" title="Export all bookmarks">Export</button>
     <button class="settings-btn" onclick="openSettings()" title="Settings">⚙️</button>
   </div>
@@ -449,6 +468,31 @@ header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 18p
   </div>
 </div>
 
+<div class="modal-overlay hidden" id="edit-overlay">
+  <div class="modal"><div class="modal-header"><span class="modal-title">Edit bookmark</span><button class="modal-close" onclick="$('edit-overlay').classList.add('hidden')">Close</button></div>
+  <form class="modal-body" onsubmit="saveEdit(event)">
+    <label>Title<input class="field-input" id="edit-title" maxlength="300" required></label>
+    <label>Notes<textarea class="field-input" id="edit-summary" maxlength="4000" rows="5"></textarea></label>
+    <label>Category<input class="field-input" id="edit-category" maxlength="60"></label>
+    <label>Tags (comma separated)<input class="field-input" id="edit-tags" maxlength="819"></label>
+    <button class="save-btn" type="submit">Save changes</button>
+  </form></div>
+</div>
+<div class="modal-overlay hidden" id="tools-overlay">
+  <div class="modal"><div class="modal-header"><span class="modal-title">Import and backups</span><button class="modal-close" onclick="$('tools-overlay').classList.add('hidden')">Close</button></div>
+  <div class="modal-body">
+    <p>Import browser HTML or Bookmark Brain JSON. Existing links stay unchanged. No AI requests are made. Up to 2 MB and 10,000 links per file.</p>
+    <label>Choose import file<input class="field-input" id="import-file" type="file" accept=".html,.htm,.json"></label>
+    <button class="save-btn" onclick="importLibrary(this)">Import selected file</button>
+    <hr style="margin:20px 0;border-color:var(--border)">
+    <p>A local backup is made before your first change each day. Backups stay in your data folder, not in the cloud. Use Export for a copy elsewhere.</p>
+    <button class="save-btn" onclick="makeBackup(this)">Back up now</button>
+    <label>Saved backups<select class="field-select" id="backup-list"></select></label>
+    <button class="save-btn" onclick="restoreLibrary(this)">Restore missing bookmarks</button>
+    <p>Restore adds missing links. It does not undo edits or replace existing bookmarks. Backups contain your links and notes, but no API keys.</p>
+    <p id="tools-status" role="status"></p>
+  </div></div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -463,15 +507,13 @@ const COLORS={YouTube:'#ef4444','X / Twitter':'#94a3b8',Instagram:'#ec4899',Link
 const PROVIDER_MODELS = """ + provider_models_json + r""";
 const PROVIDER_LABELS = """ + provider_labels_json + r""";
 const PROVIDER_SUBS = {
-  anthropic:'Claude Haiku / Sonnet / Opus',
-  openai:'GPT-4o mini, GPT-4o',
-  gemini:'Gemini Flash / Pro',
-  groq:'Llama, Mixtral (fast)',
-  ollama:'Runs locally — free'
+ none:'Private local saving; no AI', anthropic:'Your Anthropic account', openai:'Your OpenAI API account',
+ gemini:'Your Google AI account', groq:'Groq inference (not Grok)', openrouter:'One key, multiple model providers', ollama:'Installed local models'
 };
 
 let settings = """ + script_json(settings) + r""";
 let activeCat='', favOnly=false, searchTimer;
+let bookmarkRows=[], editingBookmarkId=null;
 
 // ── Toast / Progress ──
 function toast(msg){const t=$('toast');t.textContent=msg;t.className='toast show';clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),3200)}
@@ -491,6 +533,7 @@ async function loadBM(){
   if(activeCat)p.push('category='+encodeURIComponent(activeCat));
   let bm=await apiFetch('/api/bookmarks'+(p.length?'?'+p.join('&'):'')).then(r=>r.json());
   if(favOnly)bm=bm.filter(b=>b.favourite);
+  bookmarkRows=bm;
   // n-total is updated by loadCats which always fetches unfiltered count
   if(!bm.length){
     $('cards').innerHTML=`<div class="empty"><div class="empty-icon">🔍</div><h3>${activeCat||favOnly||q?'No matches':'No bookmarks yet'}</h3><p>${activeCat||favOnly||q?'Try different terms.':'Drag links or .webloc files into the sidebar.'}</p></div>`;
@@ -504,6 +547,7 @@ async function loadBM(){
       <div class="card-actions">
         <button class="card-btn card-star${b.favourite?' active':''}" onclick="toggleFav(${b.id},event)">${b.favourite?'★':'☆'}</button>
         <a class="card-btn" href="${esc(/^https?:\/\//i.test(b.url)?b.url:'#')}" target="_blank" rel="noopener noreferrer">↗</a>
+        <button class="card-btn" title="Edit bookmark" onclick="editBookmark(${b.id})">Edit</button>
         <button class="card-btn card-del" onclick="delBM(${b.id},event)">✕</button>
       </div>
       <div class="card-top">
@@ -550,7 +594,8 @@ async function upload(files){
   const res=await apiFetch('/api/upload',{method:'POST',body:fd}).then(r=>r.json());
   prog(100);
   const added=res.filter(r=>r.success).length,skip=res.filter(r=>r.skipped).length;
-  toast(added?`✓ Added ${added}${skip?' · '+skip+' skipped':''}`:skip?`${skip} already saved`:'Nothing added');
+  const favourites=res.filter(r=>r.favourite).length;
+  toast(favourites?`${favourites} repeated link(s) are now favourites`:added?`✓ Added ${added}${skip?' · '+skip+' skipped':''}`:skip?`${skip} repeated or unsupported link(s)`:'Nothing added');
   loadBM();loadCats();updateFavCount();
 }
 
@@ -560,7 +605,7 @@ async function addUrl(url){
     const r=await apiFetch('/api/add_url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
     const d=await r.json();prog(100);
     if(d.success)toast('✓ Added: '+d.title);
-    else if(d.skipped)toast('Already saved');
+    else if(d.skipped)toast(d.favourite?'Already saved · marked as a favourite':`Already saved · saved ${d.save_count||2} times (3 makes it a favourite)`);
     else toast('Error: '+(d.error||'unknown'));
     loadBM();loadCats();updateFavCount();
   }catch(e){prog(100);toast('Error: '+e.message);}
@@ -602,13 +647,14 @@ function handleOverlayClick(e){
 
 function renderProviderGrid(){
   $('provider-grid').innerHTML=Object.entries(PROVIDER_LABELS).map(([id,label])=>`
-    <div class="provider-card${editingSettings.provider===id?' selected':''}" onclick="selectProvider('${id}')">
+    <button type="button" class="provider-card${editingSettings.provider===id?' selected':''}" onclick="selectProvider('${id}')">
       <div class="provider-card-name">${label}</div>
       <div class="provider-card-sub">${PROVIDER_SUBS[id]||''}</div>
-    </div>`).join('');
+    </button>`).join('');
 }
 
 function selectProvider(id){
+  captureProvider();
   editingSettings.provider=id;
   renderProviderGrid();
   renderProviderConfig(id);
@@ -616,7 +662,7 @@ function selectProvider(id){
 
 function renderProviderConfig(provider){
   const cfg=editingSettings.providers[provider]||{};
-  const models=PROVIDER_MODELS[provider]||[];
+  const models=[];
   const modelOpts=models.map(m=>`<option value="${m}"${cfg.model===m?' selected':''}>${m}</option>`).join('');
 
   let html='';
@@ -629,7 +675,7 @@ function renderProviderConfig(provider){
     <div class="ollama-note">
       🦙 Ollama runs AI models completely locally on your Mac — no API key needed and totally free.<br><br>
       Install from <strong>ollama.com</strong>, then run a model:<br>
-      <code style="font-family:'DM Mono',monospace;font-size:11px">ollama pull llama3.2</code>
+      <span>Download a text model in Ollama, then choose Load models below.</span>
     </div>`;
   } else if(provider!=='none') {
     html+=`<div class="field-group">
@@ -641,13 +687,19 @@ function renderProviderConfig(provider){
 
   html+=`<div class="field-group">
     <div class="field-label">Model</div>
-    <input class="field-input" id="cfg-model" value="${esc(cfg.model||'')}" placeholder="Model ID from your provider" ${provider==='none'?'disabled':''}>
+    <input class="field-input" id="cfg-model" list="live-models" value="${esc(cfg.model||'')}" placeholder="Model ID from your provider" ${provider==='none'?'disabled':''}>
   </div>`;
 
+  if(provider!=='none') html+=`<datalist id="live-models"></datalist>
+    <button class="save-btn" type="button" onclick="providerAction('models',this)">Load models</button>
+    <button class="save-btn" type="button" onclick="providerAction('test-provider',this)">Test connection</button>
+    <p>Load models queries the provider catalogue. You can also type a model ID. Listings do not guarantee access or compatibility; test your selection.</p>
+    <p>Testing makes one small request using example.com, not your bookmarks. Provider charges may apply. Saving a new link with AI enabled sends its URL and title to this provider.</p>
+    <p id="provider-status" role="status"></p>`;
   $('provider-config').innerHTML=html;
 }
 
-async function saveSettings(){
+function captureProvider(){
   const p=editingSettings.provider;
   const cfg=editingSettings.providers[p];
   if($('cfg-model')) cfg.model=$('cfg-model').value;
@@ -655,6 +707,10 @@ async function saveSettings(){
   cfg.clear_key=!!$('cfg-clear-key')?.checked;
   if($('cfg-base-url')) cfg.base_url=$('cfg-base-url').value.trim();
 
+}
+
+async function saveSettings(){
+  captureProvider();
   const r=await apiFetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(editingSettings)});
   const d=await r.json();
   if(d.success){
@@ -673,6 +729,67 @@ async function exportBookmarks(){
   const a=document.createElement('a');a.href=url;a.download='bookmark-brain.json';a.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
+
+async function requestJSON(path, body){
+ const response=await apiFetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ const result=await response.json();if(!response.ok)throw new Error(result.error||'Please try again.');return result;
+}
+async function providerAction(action,button){
+ captureProvider();const provider=editingSettings.provider;
+ if(action==='test-provider'&&!confirm('Send one test request with example.com? This uses up to 1,600 output tokens and your provider may charge for it. No bookmarks are sent.'))return;
+ button.disabled=true;const status=$('provider-status');status.textContent='Connecting…';
+ try{
+  const result=await requestJSON('/api/'+action,{provider,config:editingSettings.providers[provider],confirm_cost:action==='test-provider'});
+  if(editingSettings.provider!==provider)return;
+  if(action==='models'){
+   $('live-models').innerHTML=result.models.map(m=>`<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
+   status.textContent=`Loaded ${result.models.length} models. Start typing in Model to choose one, then test it.`;
+  }else status.textContent=result.message;
+ }catch(e){status.textContent=e.message}finally{button.disabled=false}
+}
+function editBookmark(id){
+ const b=bookmarkRows.find(r=>r.id===id);if(!b)return;editingBookmarkId=id;
+ $('edit-title').value=b.title||'';$('edit-summary').value=b.summary||'';
+ $('edit-category').value=b.category||'Other';$('edit-tags').value=b.tags.join(', ');
+ $('edit-overlay').classList.remove('hidden');$('edit-title').focus();
+}
+async function saveEdit(event){
+ event.preventDefault();const button=event.submitter;button.disabled=true;
+ try{
+  const body={title:$('edit-title').value.trim(),summary:$('edit-summary').value,category:$('edit-category').value.trim()||'Other',tags:$('edit-tags').value.split(',').map(t=>t.trim()).filter(Boolean)};
+  const response=await apiFetch('/api/bookmarks/'+editingBookmarkId,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const result=await response.json();if(!response.ok)throw new Error(result.error);
+  $('edit-overlay').classList.add('hidden');toast('Changes saved');loadBM();loadCats();
+ }catch(e){toast(e.message)}finally{button.disabled=false}
+}
+async function loadBackups(){
+ const response=await apiFetch('/api/backups');const names=await response.json();
+ $('backup-list').innerHTML=names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+}
+async function openLibraryTools(){
+ $('tools-overlay').classList.remove('hidden');$('tools-status').textContent='';
+ try{await loadBackups()}catch(e){$('tools-status').textContent='Could not load backups.'}
+}
+async function importLibrary(button){
+ const file=$('import-file').files[0];if(!file){$('tools-status').textContent='Choose a file first.';return}
+ if(file.size>1900000){$('tools-status').textContent='Choose a file smaller than 1.9 MB.';return}
+ button.disabled=true;
+ try{const result=await requestJSON('/api/import',{filename:file.name,content:await file.text()});
+ $('tools-status').textContent=`Added ${result.added}. Skipped ${result.skipped} duplicate or unsupported links. Existing links were unchanged.`;
+ loadBM();loadCats();updateFavCount();await loadBackups();
+ }catch(e){$('tools-status').textContent=e.message}finally{button.disabled=false}
+}
+async function makeBackup(button){
+ button.disabled=true;try{const result=await requestJSON('/api/backup',{});await loadBackups();$('tools-status').textContent='Backup saved: '+result.filename}
+ catch(e){$('tools-status').textContent=e.message}finally{button.disabled=false}
+}
+async function restoreLibrary(button){
+ const filename=$('backup-list').value;if(!filename)return;
+ if(!confirm('Add missing bookmarks from this backup? Existing bookmarks and edits will stay unchanged.'))return;
+ button.disabled=true;try{const result=await requestJSON('/api/restore',{filename});$('tools-status').textContent=`Restored ${result.added} missing bookmarks. Existing links were unchanged.`;loadBM();loadCats();updateFavCount();await loadBackups()}
+ catch(e){$('tools-status').textContent=e.message}finally{button.disabled=false}
+}
+
 // ── Init ──
 updateProviderPill();
 loadBM();loadCats();updateFavCount();
@@ -755,6 +872,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json([dict(r) for r in db.execute("SELECT category, COUNT(*) as count FROM bookmarks GROUP BY category ORDER BY count DESC")])
             elif path == "/api/stats":
                 self.send_json({"total": db.execute("SELECT COUNT(*) FROM bookmarks").fetchone()[0], "favourites": db.execute("SELECT COUNT(*) FROM bookmarks WHERE favourite=1").fetchone()[0]})
+            elif path == "/api/backups":
+                folder = Path(SUPPORT_DIR) / "backups"
+                self.send_json([p.name for p in sorted(folder.glob("bookmarks-*.json"), reverse=True)])
             elif path == "/api/settings":
                 self.send_json(public_settings(load_settings()))
             else:
@@ -773,13 +893,18 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("Use a complete http or https link without credentials")
         with _db_lock, contextlib.closing(get_db()) as db:
             if db.execute("SELECT id FROM bookmarks WHERE url=?", (url,)).fetchone():
-                return {"skipped": True, "error": "Already saved"}
+                db.execute("UPDATE bookmarks SET save_count=save_count+1, favourite=CASE WHEN save_count+1>=3 THEN 1 ELSE favourite END WHERE url=?", (url,))
+                db.commit()
+                row = db.execute("SELECT save_count,favourite FROM bookmarks WHERE url=?", (url,)).fetchone()
+                return {"skipped": True, "error": "Already saved", "save_count": row["save_count"], "favourite": bool(row["favourite"])}
         data = analyze_bookmark(url, title)
         with _db_lock, contextlib.closing(get_db()) as db:
             try:
                 db.execute("INSERT INTO bookmarks (url,title,summary,category,tags,domain) VALUES (?,?,?,?,?,?)", (url, data["title"], data["summary"], data["category"], json.dumps(data["tags"]), urlparse(url).hostname))
                 db.commit()
             except sqlite3.IntegrityError:
+                db.execute("UPDATE bookmarks SET save_count=save_count+1, favourite=CASE WHEN save_count+1>=3 THEN 1 ELSE favourite END WHERE url=?", (url,))
+                db.commit()
                 return {"skipped": True, "error": "Already saved"}
         return {"success": True, "title": data["title"], "category": data["category"]}
 
@@ -791,7 +916,60 @@ class Handler(BaseHTTPRequestHandler):
             if length < 0 or length > MAX_BODY:
                 self.send_json({"error": "Request exceeds 2 MB"}, 413)
                 return
-            if self.command == "POST" and self.path == "/api/settings":
+            if self.path in ("/api/add_url", "/api/upload", "/api/import", "/api/restore") or self.path.startswith("/api/bookmarks/"):
+                with _db_lock, contextlib.closing(get_db()) as db:
+                    features.snapshot(db, SUPPORT_DIR, "daily")
+            if self.command == "POST" and self.path in ("/api/models", "/api/test-provider"):
+                body = self.read_json(length)
+                provider = body.get("provider")
+                if provider not in DEFAULT_SETTINGS["providers"]:
+                    raise ValueError("Unknown provider")
+                cfg = dict(load_settings()["providers"][provider])
+                supplied = body.get("config", {})
+                if not isinstance(supplied, dict): raise ValueError("Invalid provider settings")
+                for key in ("api_key", "model", "base_url"):
+                    if key in supplied:
+                        value = supplied[key]
+                        if not isinstance(value, str) or len(value) > 2048: raise ValueError("Invalid setting")
+                        if key != "api_key" or value: cfg[key] = value
+                if supplied.get("clear_key"): cfg["api_key"] = ""
+                if provider == "ollama" and (not valid_url(cfg.get("base_url", "")) or urlparse(cfg["base_url"]).hostname not in ("localhost", "127.0.0.1", "::1")):
+                    raise ValueError("Ollama must use a local loopback address")
+                if self.path == "/api/models":
+                    self.send_json({"models": features.model_catalogue(provider, cfg)})
+                else:
+                    if body.get("confirm_cost") is not True: raise ValueError("Confirm the test request and possible provider charge first")
+                    if provider == "none":
+                        self.send_json({"success": True, "message": "No AI selected. No external request made."})
+                        return
+                    if not cfg.get("model"): raise ValueError("Choose a model first")
+                    if provider != "ollama" and not cfg.get("api_key"): raise ValueError("Enter an API key first")
+                    prompt = PROMPT_TEMPLATE.format(url="https://example.com", domain="example.com", title="Connection test")
+                    result = CALLERS[provider](prompt, cfg)
+                    if not isinstance(result, dict) or not isinstance(result.get("title"), str):
+                        raise ValueError("The model connected but did not return usable bookmark JSON. Try another text model.")
+                    self.send_json({"success": True, "message": "Connection and bookmark response format verified. No bookmarks were sent or changed."})
+            elif self.command == "POST" and self.path == "/api/backup":
+                with _db_lock, contextlib.closing(get_db()) as db:
+                    filename = features.snapshot(db, SUPPORT_DIR)
+                self.send_json({"success": True, "filename": filename})
+            elif self.command == "POST" and self.path in ("/api/import", "/api/restore"):
+                body = self.read_json(length)
+                if self.path == "/api/restore":
+                    filename = body.get("filename", "")
+                    if not isinstance(filename, str) or not re.fullmatch(r"bookmarks-[0-9-]+-(daily|manual|before-import)-[0-9-]+\.json", filename):
+                        raise ValueError("Choose a listed backup")
+                    content = (Path(SUPPORT_DIR) / "backups" / filename).read_bytes()
+                else:
+                    filename, content = body.get("filename", ""), body.get("content", "")
+                    if not isinstance(filename, str) or not isinstance(content, str): raise ValueError("Invalid import")
+                    content = content.encode()
+                rows, skipped = features.parse_import(filename, content, valid_url, local_backup=self.path == "/api/restore")
+                with _db_lock, contextlib.closing(get_db()) as db:
+                    features.snapshot(db, SUPPORT_DIR, "before-import")
+                    added = features.merge_rows(db, rows)
+                self.send_json({"success": True, "added": added, "skipped": skipped + len(rows) - added})
+            elif self.command == "POST" and self.path == "/api/settings":
                 body = self.read_json(length)
                 if body.get("provider") not in DEFAULT_SETTINGS["providers"] or not isinstance(body.get("providers"), dict):
                     raise ValueError("Unknown provider")
@@ -850,6 +1028,11 @@ class Handler(BaseHTTPRequestHandler):
                         db.execute("UPDATE bookmarks SET favourite=1-favourite WHERE id=?", (bid,))
                     elif self.command == "PATCH" and not match.group(2):
                         body = self.read_json(length)
+                        for field, limit in (("title", 300), ("summary", 4000)):
+                            if field in body:
+                                if not isinstance(body[field], str) or len(body[field]) > limit:
+                                    raise ValueError("Invalid " + field)
+                                db.execute("UPDATE bookmarks SET " + field + "=? WHERE id=?", (body[field], bid))
                         if "category" in body:
                             if not isinstance(body["category"], str) or len(body["category"]) > 60:
                                 raise ValueError("Invalid category")
@@ -864,8 +1047,11 @@ class Handler(BaseHTTPRequestHandler):
                         return
                     db.commit()
                 self.send_json({"success": True})
+        except urllib.error.HTTPError as e:
+            messages = {401: "The provider rejected the API key.", 403: "Your key does not have access to this model or service.", 404: "This model or endpoint is unavailable. Load models and choose another.", 402: "The provider requires credits or billing to be enabled.", 429: "The provider rate limit or quota was reached. Try later or check your balance."}
+            self.send_json({"error": messages.get(e.code, "The provider rejected this request. Check model compatibility and your account.")}, 502)
         except (ValueError, TypeError) as e:
-            self.send_json({"error": str(e)}, 400)
+            self.send_json({"error": str(e) if not isinstance(e, json.JSONDecodeError) else "The file or provider response was not valid JSON."}, 400)
         except Exception:
             self.send_json({"error": "Could not complete the request. Check your AI settings or choose No AI; existing bookmarks are unchanged."}, 502)
 
@@ -878,7 +1064,7 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     os.makedirs(SUPPORT_DIR, mode=0o700, exist_ok=True)
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    print(f"Bookmark Brain v1.9.0-beta.1: http://127.0.0.1:{PORT}", flush=True)
+    print(f"Bookmark Brain v1.10.0-beta.1: http://127.0.0.1:{PORT}", flush=True)
     print(f"Database: {DB_PATH}. Press Ctrl+C to stop.", flush=True)
     try:
         server.serve_forever()

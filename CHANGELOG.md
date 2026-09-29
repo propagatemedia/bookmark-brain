@@ -1,3 +1,16 @@
+# v1.10.0-beta.1
+
+- Edit bookmark titles, notes, categories and tags locally.
+- Import browser HTML and Bookmark Brain JSON without AI; merge missing links without overwriting existing records.
+- Add daily pre-change backups, manual snapshots and missing-bookmark restore. Backups contain no API keys.
+- Saving the same exact URL three times automatically favourites the single existing record. Bulk imports do not count; pre-upgrade bookmarks start at one.
+- Add OpenRouter and provider model discovery with manual model entry retained.
+- Add explicit connection tests using only a sample link, with a possible-charge confirmation.
+- Modernise OpenAI requests to Responses API; preserve saved keys and model choices, remove stale model lists, and improve provider errors.
+- Add upgrade instructions, migration tests and packaging verification.
+
+Live OpenRouter catalogue verified. Paid AI generations were not tested with user credentials; model compatibility must be checked with Test connection. Apple Silicon/macOS 26.4.1+ local beta, not notarised.
+
 # v1.9.1-beta.1
 
 - Add a self-contained Apple Silicon Mac app with bundled Python and a native menu-bar launcher.

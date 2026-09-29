@@ -93,7 +93,20 @@ def smoke_test():
                 assert json.load(response)['success']
             request = urllib.request.Request(service.url + '/api/bookmarks', headers=headers)
             with urllib.request.urlopen(request) as response:
-                assert len(json.load(response)) == 1
+                rows = json.load(response)
+                assert len(rows) == 1
+                bid = rows[0]['id']
+            def send(path, body, method='POST'):
+                req = urllib.request.Request(service.url + path, data=json.dumps(body).encode(), headers=headers, method=method)
+                with urllib.request.urlopen(req) as response:
+                    return json.load(response)
+            send('/api/add_url', {'url':'https://example.com/bundle-test'})
+            assert send('/api/add_url', {'url':'https://example.com/bundle-test'})['favourite']
+            send('/api/bookmarks/' + str(bid), {'title':'Edited in bundle','summary':'Local notes','tags':['tested']}, 'PATCH')
+            result = send('/api/import', {'filename':'browser.html','content':'<A HREF="https://example.org/import">Imported</A>'})
+            assert result['added'] == 1
+            assert send('/api/backup', {})['filename']
+            assert send('/api/models', {'provider':'none'})['models'] == []
             second = LocalService()
             assert second.start() is False
             assert second.url == service.url
