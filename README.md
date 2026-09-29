@@ -18,6 +18,14 @@ Python is included, and existing bookmarks stay in the same local data folder. C
 
 [Release notes and checksum](https://github.com/propagatemedia/bookmark-brain/releases/tag/v1.10.2-beta.1) · [Build instructions](MAC-PACKAGING.md)
 
+## Windows app: no Terminal or Python installation needed
+
+[Download the Windows x64 app](https://github.com/propagatemedia/bookmark-brain/releases/download/v1.10.2-beta.1/Bookmark-Brain-Windows-x64.zip).
+
+Extract All, open the extracted folder and double-click **Bookmark Brain.exe**. Keep the whole folder together. Minimise the control window to keep running; close it to quit. Bookmarks are stored in `%LOCALAPPDATA%\BookmarkBrain`, separately from the download.
+
+This unsigned beta is built and smoke-tested on a Windows runner. Manual Windows 10/11 installation has not been verified. [Windows setup and upgrade guide](WINDOWS.md).
+
 ## Download and run the source version
 
 [Download v1.10.2-beta.1](https://github.com/propagatemedia/bookmark-brain/releases/tag/v1.10.2-beta.1).
