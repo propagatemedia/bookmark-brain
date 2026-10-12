@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 sys.path.insert(0, str(Path(SPECPATH) / "scripts"))
 from mac_bundle import audit
+from PyInstaller.utils.hooks import collect_data_files
 import os
 
 arch = os.environ.get("BB_TARGET_ARCH", "arm64")
@@ -14,7 +15,7 @@ identity = os.environ.get("BOOKMARK_SIGNING_IDENTITY")
 if identity and not identity.startswith("Developer ID Application:"):
     raise ValueError("Use a Developer ID Application identity for direct distribution")
 
-a = Analysis(['mac_launcher.py'], pathex=[], binaries=[], datas=[], hiddenimports=[], hookspath=[], hooksconfig={}, runtime_hooks=[], excludes=[], noarchive=False)
+a = Analysis(['mac_launcher.py'], pathex=[], binaries=[], datas=collect_data_files('certifi'), hiddenimports=['certifi'], hookspath=[], hooksconfig={}, runtime_hooks=['scripts/mac_certificates.py'], excludes=[], noarchive=False)
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='Bookmark Brain', debug=False, bootloader_ignore_signals=False, strip=False, upx=False, console=False, argv_emulation=False, target_arch=arch, codesign_identity=identity, entitlements_file=None)
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name='Bookmark Brain')

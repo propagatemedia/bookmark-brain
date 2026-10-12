@@ -7,6 +7,7 @@ This is local build evidence, not a published compatibility promise.
 - PyInstaller candidate built successfully for `universal2`.
 - All 58 distinct bundled Mach-O files contain both `x86_64` and `arm64`.
 - Highest audited deployment target: **11.0**. Bundle `LSMinimumSystemVersion`: **11.0**.
+- Bundled certifi trust roots are loaded by the runtime hook; packaged smoke test confirms the SSL context has trusted CA certificates. No paid AI provider call was made.
 - Native arm64 packaged `--smoke-test`: passed, using a temporary library.
 - Full regression suite: **28 passed**, including four deployment-parser tests.
 - Source ZIP builds with the packaging helper and release documentation included.

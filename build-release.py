@@ -5,7 +5,7 @@ import zipfile
 
 root = Path(__file__).resolve().parent
 version = '1.10.3-beta.1'
-files = ['app.py', 'README.md', 'LICENSE', 'CHANGELOG.md', 'Start-Bookmark-Brain.command', 'build-release.py', 'tests/test_app.py', 'tests/test_launcher.py', 'mac_launcher.py', 'BookmarkBrain.spec', 'MAC-PACKAGING.md', 'requirements-mac-build.txt', 'assets/AppIcon.icns', 'desktop_features.py', 'tests/test_features.py', 'UPGRADE.md', 'windows_launcher.py', 'WINDOWS.md', 'NOTARISATION.md', 'RELEASING.md', 'scripts/notarise-mac.py', 'scripts/mac_bundle.py', 'tests/test_mac_bundle.py', 'VERSION', 'scripts/bump-version.py', 'scripts/checksums.py']
+files = ['app.py', 'README.md', 'LICENSE', 'CHANGELOG.md', 'Start-Bookmark-Brain.command', 'build-release.py', 'tests/test_app.py', 'tests/test_launcher.py', 'mac_launcher.py', 'BookmarkBrain.spec', 'MAC-PACKAGING.md', 'requirements-mac-build.txt', 'assets/AppIcon.icns', 'desktop_features.py', 'tests/test_features.py', 'UPGRADE.md', 'windows_launcher.py', 'WINDOWS.md', 'NOTARISATION.md', 'RELEASING.md', 'scripts/notarise-mac.py', 'scripts/mac_bundle.py', 'tests/test_mac_bundle.py', 'VERSION', 'scripts/bump-version.py', 'scripts/checksums.py', 'scripts/mac_certificates.py']
 output = root / 'dist'
 output.mkdir(exist_ok=True)
 archive = output / f'BookmarkBrain-v{version}.zip'

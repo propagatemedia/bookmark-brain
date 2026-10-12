@@ -4,6 +4,8 @@ The launcher runs a loopback HTTP server and a native menu-bar control. Bookmark
 
 ## Build requirements
 
+The runtime hook bundles certifi CA roots so HTTPS verification does not depend on the build machine’s Python installation. It honours an explicit `SSL_CERT_FILE` override.
+
 Use a python.org universal2 Python 3.12 environment with `requirements-mac-build.txt`. Confirm `lipo -archs /path/to/python3` includes both `x86_64 arm64`. An arm64-only Homebrew Python cannot produce the Universal package.
 
 `BB_TARGET_ARCH=arm64` (default) or `BB_TARGET_ARCH=universal2` controls the spec. Every collected Mach-O is audited for the required slices. The highest deployment target across those slices, with an 11.0 floor, becomes `LSMinimumSystemVersion` before the app bundle is signed. The result is printed and saved in `mac-binary-audit.json`; it never uses the build machine's OS version.
