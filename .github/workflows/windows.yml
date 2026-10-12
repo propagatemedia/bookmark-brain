@@ -1,13 +1,24 @@
 name: Windows downloadable app
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build
+        required: true
+        type: string
+      publish:
+        description: Upload to the existing release (requires approval)
+        type: boolean
+        default: false
 permissions:
-  contents: write
+  contents: read
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -32,7 +43,26 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "Archive smoke test failed: $($p.ExitCode)" }
           $hash = (Get-FileHash 'Bookmark-Brain-Windows-x64.zip' -Algorithm SHA256).Hash.ToLower()
           "$hash  Bookmark-Brain-Windows-x64.zip" | Set-Content -Encoding ascii WINDOWS-SHA256SUMS.txt
-      - name: Publish beside Mac download
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bookmark-brain-windows
+          path: |
+            Bookmark-Brain-Windows-x64.zip
+            WINDOWS-SHA256SUMS.txt
+            WINDOWS.md
+  publish:
+    if: inputs.publish
+    needs: build
+    environment: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: bookmark-brain-windows
+      - name: Upload approved assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload v1.10.3-beta.1 Bookmark-Brain-Windows-x64.zip WINDOWS-SHA256SUMS.txt WINDOWS.md --repo propagatemedia/bookmark-brain
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: gh release upload "$RELEASE_TAG" Bookmark-Brain-Windows-x64.zip WINDOWS-SHA256SUMS.txt WINDOWS.md --repo propagatemedia/bookmark-brain

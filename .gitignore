@@ -8,3 +8,9 @@ dist/
 
 .venv-mac/
 build/
+
+*.p12
+*.p8
+*.cer
+.venv*/
+release-workspace*/

@@ -75,6 +75,9 @@ class LocalService:
 
 def smoke_test():
     import tempfile
+    if getattr(sys, 'frozen', False):
+        import ssl
+        assert ssl.create_default_context().cert_store_stats()['x509_ca'] > 0, 'Bundled HTTPS trust roots are missing'
     with tempfile.TemporaryDirectory(prefix='bookmark-brain-bundle-test-') as folder:
         app.SUPPORT_DIR = folder
         app.DB_PATH = str(Path(folder) / 'bookmarks.db')

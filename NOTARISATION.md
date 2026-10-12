@@ -21,3 +21,15 @@ Prepare builds outside Google Drive, signs bundled code using PyInstaller's Deve
 Submit uploads the signed archive to Apple using the Keychain profile and records its submission ID. Finalise checks Apple's result; it refuses to continue unless Accepted. It saves the review log, staples and validates the ticket, checks Gatekeeper, creates a fresh ZIP and tests the extracted app. Review any warnings and test a downloaded copy before releasing it. None of these commands replaces GitHub assets or deploys the website.
 
 If Apple rejects the build, retrieve the submission log with notarytool and fix the reported issue before resubmitting. Do not claim notarisation, weaken Gatekeeper or replace the existing working download to work around rejection.
+
+## Universal candidate and one-command preparation
+
+With a universal2 Python environment containing the pinned requirements:
+
+```sh
+/path/to/venv/bin/python scripts/notarise-mac.py release --arch universal2 --identity "$BOOKMARK_SIGNING_IDENTITY"
+```
+
+`release` prepares, waits for Apple's decision, then finalises locally. It **does not publish**. All separate stages remain available. `--python` selects another build environment if needed. The binary audit and minimum OS are recorded before signing; Universal candidates fail if a binary lacks either slice or the Rosetta smoke test fails. Install Rosetta on Apple Silicon before this test, or verify on Intel hardware separately before claiming support.
+
+Finalise saves `verification.txt`, requires Developer ID, timestamp, hardened runtime and Gatekeeper notarisation evidence, and tests the extracted archive. Stable candidate names are `Bookmark-Brain-Mac-Universal.zip` and `Bookmark-Brain-Mac-Apple-Silicon.zip`. Existing release URLs remain unchanged until a new release is approved.
