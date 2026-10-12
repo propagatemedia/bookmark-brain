@@ -1,5 +1,12 @@
 # v1.10.3-beta.1
 
+## Unreleased
+
+- Configurable Universal Mac build with audited binary architectures and deployment targets. Compatibility remains subject to native, Intel and older-OS testing.
+- One-command local notarisation and saved signature evidence; no automatic publication.
+- Parameterised Windows release builds with artifact-only default.
+- The published v1.10.3-beta.1 Apple Silicon archive is Developer ID signed, Apple-notarised and stapled.
+
 - Expand all and Collapse all for the visible cards.
 - Brain button enriches locally saved bookmarks on demand. Requests require confirmation; failures preserve existing content.
 - Enrichment status survives backup and import. Older bookmarks have unknown status and offer enrichment without claiming they were never processed.

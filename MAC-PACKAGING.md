@@ -1,23 +1,17 @@
-# Terminal-free local Mac build
+# Terminal-free Mac packaging
 
-`mac_launcher.py` runs the existing HTTP app in a background thread and offers a native menu bar with Open, Open data folder and Quit. It keeps the existing data paths. A file lock prevents duplicate packaged instances; port conflicts fall back to a free loopback port without killing anything. Python and Cocoa dependencies are bundled by PyInstaller.
+The launcher runs a loopback HTTP server and a native menu-bar control. Bookmarks remain in the user's existing data folder. Packaging and testing must use temporary data, never a real library.
 
-## Build
+## Build requirements
 
-Create `.venv-mac` using Python 3.12, then install `requirements-mac-build.txt` into it. Run:
+Use a python.org universal2 Python 3.12 environment with `requirements-mac-build.txt`. Confirm `lipo -archs /path/to/python3` includes both `x86_64 arm64`. An arm64-only Homebrew Python cannot produce the Universal package.
 
-```sh
-.venv-mac/bin/pyinstaller --noconfirm BookmarkBrain.spec
-```
+`BB_TARGET_ARCH=arm64` (default) or `BB_TARGET_ARCH=universal2` controls the spec. Every collected Mach-O is audited for the required slices. The highest deployment target across those slices, with an 11.0 floor, becomes `LSMinimumSystemVersion` before the app bundle is signed. The result is printed and saved in `mac-binary-audit.json`; it never uses the build machine's OS version.
 
-The spec targets arm64 and conservatively sets the minimum OS to the build Mac's macOS version. This local build was tested on macOS 26.4.1. It is not an Intel or older-macOS release.
+A binary deployment target is not proof of runtime compatibility. Do not advertise an older OS or Intel support until the candidate passes the appropriate launch tests. The currently published v1.10.3-beta.1 download remains Apple Silicon, tested on macOS 26.4.1. This branch does not change that download.
 
-Google Drive can add FinderInfo attributes to bundle directories and interfere with signature validation. Copy the generated bundle to a local temporary directory using `ditto --norsrc --noextattr`, run `codesign --verify --deep --strict` there, then ZIP that clean copy. Distribute the ZIP, not a live app bundle in Google Drive.
+## Signing and verification
 
-## Verify
+Follow [NOTARISATION.md](NOTARISATION.md) for Developer ID signing, notarisation and stapling. Build outside Google Drive so Finder attributes do not invalidate signatures. Never publish an unsigned intermediate bundle.
 
-- `python3 -m unittest discover -s tests -v`: 23 tests, including launcher exclusivity and port fallback.
-- Run the bundled `Contents/MacOS/Bookmark Brain --smoke-test`: uses a temporary database to verify bundled SQLite, HTTP saving and title rendering.
-- Launch through macOS `open` with `BOOKMARK_SUPPORT` pointing at a dedicated `/tmp/` path, `BOOKMARK_NO_BROWSER=1` and `BOOKMARK_TEST_EXIT_SECONDS=8` for a timed menu-app lifecycle check. Confirm that the local HTTP endpoint starts and stops and the lock is released.
-
-The local bundle is ad-hoc signed. Developer ID signing, notarisation, public release and website download replacement are not part of this local packaging task.
+Run `python3 -m unittest discover -s tests -v` (24 existing product tests plus packaging tests). The bundled `--smoke-test` uses a temporary database. Universal candidates must pass this test natively and using `arch -x86_64`, then a manual launch on the oldest advertised macOS. Rosetta checks on a new Mac do not replace that older-OS test.
